@@ -22,6 +22,6 @@ MentorTAB is designed to support mentors without collecting or storing children'
 
 ## Origin
 
-Built at IMPACTHON 2026.
+Built at IMPACTHON 2026 - led by 8200 Alumni and Base44.
 
 Concept, product, and clinical framing by Danya Dotan, Bridge-iT Technologies.
