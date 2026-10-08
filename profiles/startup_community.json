@@ -1,0 +1,23 @@
+{
+  "name": "בית — קהילת יזמים",
+  "type": "startup_community",
+  "language": "he",
+  "about": "קהילת יזמים וסטארטאפ ישראלית — מייסדים, מפתחים, אנשי מוצר ומשקיעים early-stage עד series A.",
+  "categories": {
+    "help_request": "חבר מבקש עזרה, ייעוץ, המלצה או referral",
+    "help_offer": "חבר מציע מיומנות, שירות או תמיכה",
+    "initiative": "הצעת פרויקט, שיתוף פעולה או רעיון",
+    "link": "שיתוף קישור חיצוני",
+    "event": "אירוע, meetup, וובינר",
+    "general": "שיחה כללית"
+  },
+  "terminology": {"members": "חברי הקהילה", "group": "הקהילה", "messages": "הודעות"},
+  "focus_areas": ["גיוס הון", "SaaS", "UX", "אוטומציה", "שותף טכני"],
+  "custom_instructions": ["כשמישהו מחפש עזרה, בדוק אם מישהו הציע שירות רלוונטי"],
+  "demo_messages": [
+    {"sender_name": "Adam", "content": "מחפש ניסיון ב-SaaS pricing, משיקים חודש הבא", "category": "help_request", "timestamp": "2026-05-01T09:00:00"},
+    {"sender_name": "Alon", "content": "5 שנות ניסיון ב-SaaS growth, שמח לעזור", "category": "help_offer", "timestamp": "2026-05-01T09:15:00"},
+    {"sender_name": "Maya", "content": "UX researcher, 4 שנים enterprise. DM אותי", "category": "help_offer", "timestamp": "2026-05-02T10:30:00"}
+  ],
+  "system_prompt": "אתה Talbot, עוזר לקבוצת קהילת יזמים. תפקידך לחבר בין אנשים, לאתר מומחיות ולעקוב אחר יוזמות."
+}

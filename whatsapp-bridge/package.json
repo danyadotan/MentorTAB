@@ -1,0 +1,10 @@
+{
+  "name": "talbot-whatsapp-bridge",
+  "version": "1.0.0",
+  "description": "Bridges a WhatsApp group to the MentorTAB/Talbot API using whatsapp-web.js",
+  "type": "module",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": { "whatsapp-web.js": "^1.26.0", "qrcode-terminal": "^0.12.0" },
+  "engines": { "node": ">=18" }
+}

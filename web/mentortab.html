@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MentorTAB · רגע אימון</title>
+<style>
+  :root{--navy-900:#0c1c42;--card:#17316b;--card-2:#1a3468;--line:#2c4585;--line-soft:#23386e;
+    --cream:#f2ede0;--amber:#f5b52e;--green:#46b98a;--coral:#e0564f;--ink:#eaf0fb;--ink-2:#b7c6e6;--ink-3:#8598c4;
+    --chip:#21407f;--chip-hover:#2a4e93;--font:"Assistant","Heebo","Segoe UI",system-ui,-apple-system,Arial,sans-serif;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);background:
+    radial-gradient(1100px 620px at 80% -8%,rgba(245,181,46,.10),transparent 60%),
+    radial-gradient(900px 700px at 0% 100%,rgba(70,185,138,.08),transparent 55%),var(--navy-900);
+    color:var(--ink);line-height:1.6;min-height:100vh;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:760px;margin:0 auto;padding:26px 18px 60px}
+  .en{direction:ltr;unicode-bidi:isolate}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:26px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.15rem;color:var(--cream)}
+  .brand span{color:var(--amber)}
+  .brand .dot{width:11px;height:11px;border-radius:50%;background:var(--amber);box-shadow:0 0 14px var(--amber)}
+  .live{font-size:.72rem;font-weight:700;color:var(--green);border:1px solid rgba(70,185,138,.4);border-radius:999px;padding:4px 11px}
+  h1{font-size:clamp(1.6rem,5vw,2.3rem);color:var(--cream);margin:0 0 8px;letter-spacing:-.3px}
+  h1 .g{background:linear-gradient(100deg,var(--amber),#f7c65a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lead{color:var(--ink-2);margin:0 0 24px;font-size:1.02rem;max-width:60ch}
+  .shell{background:linear-gradient(180deg,#16305f,#11274f);border:1px solid var(--line);border-radius:22px;padding:8px;box-shadow:0 18px 44px rgba(4,12,32,.45)}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px 12px;flex-wrap:wrap}
+  .top .id{display:flex;align-items:center;gap:11px}
+  .top .badge{width:40px;height:40px;border-radius:12px;background:rgba(245,181,46,.14);display:grid;place-items:center;color:var(--amber);font-size:1.2rem}
+  .top .t{font-weight:800;color:var(--cream)}
+  .top .s{color:var(--green);font-size:.8rem}
+  .pill{font-size:.72rem;font-weight:700;color:var(--amber);background:rgba(245,181,46,.12);border:1px solid rgba(245,181,46,.3);padding:5px 11px;border-radius:999px}
+  .body{background:var(--navy-900);border-radius:16px;padding:20px;min-height:280px}
+  .lbl{color:var(--ink-3);font-size:.76rem;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-bottom:12px}
+  textarea{width:100%;background:var(--card);border:1px solid var(--line-soft);border-radius:14px;color:var(--ink);font:inherit;font-size:1rem;padding:14px;resize:vertical;min-height:96px}
+  textarea:focus{outline:2px solid var(--amber);outline-offset:1px}
+  .examples{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+  .ex{font:inherit;font-size:.86rem;background:var(--chip);color:var(--ink);border:1px solid var(--line-soft);border-radius:999px;padding:7px 13px;cursor:pointer}
+  .ex:hover{background:var(--chip-hover)}
+  .go{margin-top:16px;width:100%;background:var(--cream);color:#102653;border:none;border-radius:999px;padding:13px;font:inherit;font-weight:800;font-size:1rem;cursor:pointer;transition:transform .12s}
+  .go:hover:not(:disabled){transform:translateY(-1px)}.go:disabled{opacity:.55;cursor:default}
+  .thinking{display:flex;align-items:center;gap:10px;color:var(--ink-3);padding:16px 0}
+  .thinking i{width:7px;height:7px;border-radius:50%;background:var(--amber);display:inline-block;animation:blink 1.1s infinite}
+  .thinking i:nth-child(2){animation-delay:.18s}.thinking i:nth-child(3){animation-delay:.36s}
+  @keyframes blink{0%,65%,100%{opacity:.25}32%{opacity:1}}
+  @media(prefers-reduced-motion:reduce){.thinking i{animation:none;opacity:.7}}
+  .reframe{background:rgba(70,185,138,.1);border:1px solid rgba(70,185,138,.32);border-radius:12px;padding:13px 16px;color:var(--ink);font-weight:600;margin-bottom:16px}
+  .reframe b{color:var(--green)}
+  .ansec{background:var(--card);border:1px solid var(--line-soft);border-radius:14px;padding:15px 17px;margin-bottom:11px}
+  .ansec .h{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .ansec .num{width:25px;height:25px;border-radius:8px;background:rgba(245,181,46,.15);color:var(--amber);display:grid;place-items:center;font-weight:800;font-size:.82rem}
+  .ansec .lab{font-weight:800;color:var(--cream)}
+  .ansec p{margin:0;color:var(--ink-2);font-size:.96rem}
+  .ansec.source{background:rgba(245,181,46,.07);border-color:rgba(245,181,46,.28)}
+  .ansec.source .num{background:var(--amber);color:#0c1c42}
+  .ansec.source .cite{color:var(--amber);font-weight:600}
+  .escalate{background:rgba(224,86,79,.12);border:1px solid rgba(224,86,79,.4);border-radius:12px;padding:13px 16px;color:#f6c9c6;margin-bottom:16px;font-weight:600}
+  .err{color:#f6c9c6;background:rgba(224,86,79,.12);border:1px solid rgba(224,86,79,.4);border-radius:12px;padding:13px 16px}
+  .again{margin-top:14px;background:transparent;border:1px solid var(--line);color:var(--ink-2);border-radius:999px;padding:9px 18px;font:inherit;font-weight:600;cursor:pointer}
+  .guard{margin-top:14px;color:var(--ink-3);font-size:.82rem;border-top:1px solid var(--line-soft);padding-top:14px}
+  .guard b{color:var(--ink-2)}
+  .foot{margin-top:14px;color:var(--ink-3);font-size:.8rem;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><span class="dot"></span>Mentor<span>TAB</span></div>
+    <span class="live">● מחובר למנוע חי</span>
+  </header>
+  <h1>רגע אימון <span class="g en">/ Coaching Moment</span></h1>
+  <p class="lead">תארו במילים שלכם רגע אמיתי מהצוות. MentorTAB ממסגר מחדש ומחזיר מהלך מנטורינג אחד — מה קורה, מה לעשות ב-5 דקות, מה לבנות לטווח ארוך, והמקור המחקרי.</p>
+  <div class="shell">
+    <div class="top">
+      <div class="id"><span class="badge">🧭</span>
+        <div><div class="t">רגע אימון</div><div class="s en">Grounded in Kendall · Barkley · Greene · Dunn · Shafran · Deci-Ryan · Kagan</div></div>
+      </div>
+      <span class="pill">מבוסס מחקר</span>
+    </div>
+    <div class="body" id="body" aria-live="polite"></div>
+  </div>
+  <div class="guard"><b>גבול ברור:</b> מנטור ב-FIRST הוא לא מטפל, לא בייביסיטר ולא מורה שממשמע כיתה. הכלי נותן מהלך מנטורינג פרקטי לצוות רובוטיקה — לא אבחון ולא טיפול. מצב שחורג מדינמיקת צוות רגילה מנותב לגורם האחראי.</div>
+  <p class="foot en">© Bridge-iT Technologies · concept, product &amp; clinical framing by Danya Dotan</p>
+</div>
+<script>
+const EXAMPLES=[
+  "הגיע רעב ועייף אחרי בית ספר ומתפרץ על כל דבר קטן",
+  "נרשם כי ההורים רשמו אותו, אומר שהוא לא רוצה להיות פה",
+  "ילד מופנם שלא מוציא מילה בקבוצה — וגם אני מופנם",
+  "לא מצליח להתחיל משימה שהוא יודע לעשות",
+  "שני חברי צוות בקונפליקט שעוצר את הבילד",
+  "חבר צוות נסגר ומסרב לדבר יום לפני התחרות"
+];
+const body=document.getElementById('body');
+function el(t,c,h){const e=document.createElement(t);if(c)e.className=c;if(h!==undefined)e.innerHTML=h;return e;}
+function renderInput(prefill){
+  body.innerHTML='';
+  body.appendChild(el('div','lbl','תארו את הרגע'));
+  const ta=el('textarea');ta.id='sit';ta.placeholder='למשל: חבר צוות נסגר לפני התחרות ולא מגיב...';
+  if(prefill)ta.value=prefill;body.appendChild(ta);
+  const ex=el('div','examples');
+  EXAMPLES.forEach(e=>{const b=el('button','ex',e);b.type='button';b.onclick=()=>{ta.value=e;ta.focus();};ex.appendChild(b);});
+  body.appendChild(ex);
+  const go=el('button','go','קבל רגע אימון ←');go.type='button';go.onclick=()=>submit(ta.value.trim(),go);
+  body.appendChild(go);ta.focus();
+}
+async function submit(situation,btn){
+  if(!situation)return;btn.disabled=true;body.innerHTML='';
+  const th=el('div','thinking','');th.innerHTML='<span>ממסגר מחדש ומאתר מקור מחקרי</span> <i></i><i></i><i></i>';body.appendChild(th);
+  try{
+    const r=await fetch('/coach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({situation})});
+    const d=await r.json();if(!r.ok)throw new Error(d.detail||('שגיאה '+r.status));renderAnswer(d);
+  }catch(err){
+    body.innerHTML='';body.appendChild(el('div','err','לא הצלחתי להביא תשובה: '+err.message));
+    const a=el('button','again','נסה שוב');a.type='button';a.onclick=()=>renderInput(situation);body.appendChild(a);
+  }
+}
+function renderAnswer(d){
+  body.innerHTML='';body.appendChild(el('div','lbl','התשובה'));
+  if(d.escalate&&d.escalate_note)body.appendChild(el('div','escalate','⚠️ '+d.escalate_note));
+  if(d.reframe)body.appendChild(el('div','reframe','↻ '+d.reframe));
+  [['1','מה כנראה קורה',d.whats_happening],['2','מה לעשות ב-5 דקות',d.five_minutes],['3','מה לבנות לטווח ארוך',d.long_term]].forEach(([n,lab,txt])=>{
+    if(!txt)return;const s=el('div','ansec');
+    s.innerHTML='<div class="h"><span class="num">'+n+'</span><span class="lab">'+lab+'</span></div><p></p>';
+    s.querySelector('p').textContent=txt;body.appendChild(s);
+  });
+  if(d.source_researcher||d.source_note){
+    const s=el('div','ansec source');const cite=d.source_researcher?'<span class="cite">'+d.source_researcher+'</span> — ':'';
+    s.innerHTML='<div class="h"><span class="num">✓</span><span class="lab">המקור המחקרי</span></div><p>'+cite+'<span class="note"></span></p>';
+    s.querySelector('.note').textContent=d.source_note||'';body.appendChild(s);
+  }
+  const a=el('button','again','רגע אימון נוסף ↻');a.type='button';a.onclick=()=>renderInput('');body.appendChild(a);
+}
+renderInput('');
+</script>
+</body>
+</html>

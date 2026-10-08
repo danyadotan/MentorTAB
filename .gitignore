@@ -1,0 +1,7 @@
+talbot.db
+__pycache__/
+*.pyc
+.env
+whatsapp-bridge/node_modules/
+whatsapp-bridge/.wwebjs_auth/
+whatsapp-bridge/.wwebjs_cache/
