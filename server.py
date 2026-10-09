@@ -162,5 +162,15 @@ send.disabled=false;input.focus();});</script></body></html>"""
 
 
 @app.get("/", response_class=HTMLResponse)
+def home():
+    """Root serves the MentorTAB coaching page so the base URL is the real product."""
+    path = WEB_DIR / "mentortab.html"
+    if not path.exists():
+        return WIDGET_HTML
+    return FileResponse(path)
+
+
+@app.get("/widget", response_class=HTMLResponse)
 def widget() -> str:
     return WIDGET_HTML
+
