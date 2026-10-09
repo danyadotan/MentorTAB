@@ -1,66 +1,40 @@
 # MentorTAB
 
-AI companion for **FIRST Israel robotics mentors** — plus a reusable community
-group agent. One engine, powered by Claude, two faces.
-
-- **MentorTAB — "Coaching Moment"** — free-text situation in → a structured,
-  research-informed response out (what's happening / 5-minute move / long-term /
-  research source). For mentors who are engineers, not therapists.
-- **Talbot group agent** — memory, search, classification and matchmaking for a
-  WhatsApp-style community group (e.g. the FIRST-parents registration bot).
+**One platform, two products** — an AI companion for FIRST Israel robotics, built on a single profile-driven, research-grounded, privacy-first engine.
 
 Concept, product & clinical framing by **Danya Dotan**, Bridge-iT Technologies.
 
-## Coaching guardrails (prompt + code)
+## 🧭 MentorTAB · Coaching — for mentors
+Research-grounded support at the behavioral moment of need. A mentor describes a real moment; MentorTAB reframes it and returns one move: what's likely happening, what to do in 5 minutes, what to build long-term, and the research source.
 
-A FIRST mentor is **not a therapist, not a babysitter, not a schoolteacher**.
-The engine always assumes the real room — kids arrive tired/hungry after school
-(state before content), ~half didn't choose to be there (build buy-in, not
-assume it), and many on both sides are introverts (low-social-load moves). It
-never diagnoses, and routes real risk to a responsible adult.
+**Live:** https://mentortab.onrender.com/mentortab
 
-## Quick start
+Grounded in Kendall · Barkley · Greene · Dunn · Shafran · Deci-Ryan · Kagan.
 
-```bash
-pip install -r requirements.txt
-export ANTHROPIC_API_KEY=sk-...
+## 📋 MentorTAB · Desk — for parents & staff
+A registration concierge that answers the recurring questions — age, track, costs, schedule, carpools — from the group's own memory, with external info clearly marked.
 
-# live web server (coaching page + group widget)
-TALBOT_PROFILE=first_robotics uvicorn server:app --port 8000
-#  GET /mentortab  → live Coaching Moment page
-#  POST /coach     → {"situation": "..."} → structured coaching JSON
-#  GET /, POST /chat, POST /ingest, GET /profiles, GET /health
+**Live:** https://mentortab.onrender.com/desk
 
-# coaching from the terminal
-python coach.py "חבר צוות נסגר ומסרב לדבר יום לפני התחרות"
+## Why the room is different
+- **State before content** — kids arrive tired & hungry after school; behavior is often a state problem, not character.
+- **~50% didn't choose to be here** — resistance is un-earned buy-in, not defiance (Self-Determination Theory).
+- **~60% are introverts, on both sides** — low-social-load moves, never "talk it out in the group" (Kagan).
 
-# group agent (CLI)
-python talbot.py --list-profiles
-python talbot.py --profile first_robotics --seed-demo
-```
+## Guardrails
+A FIRST mentor is **not a therapist, not a babysitter, not a schoolteacher**. The engine never diagnoses, never stores a child's data, and routes real risk to a responsible adult.
 
-## Deploy (Render / Railway — recommended over Vercel for this FastAPI app)
+## Architecture
+- Coaching (web/mentortab.html) and Desk (web/desk.html)
+- both served by server.py (FastAPI)
+- powered by Claude + SQLite/FTS5
+- shared: profiles/ · coach.py · talbot.py
 
-`render.yaml`, `Procfile`, and `Dockerfile` are included. On Render: New →
-Blueprint → point at this repo → set `ANTHROPIC_API_KEY` → deploy. Then open
-`/mentortab`.
+## Run locally
+    pip install -r requirements.txt
+    export ANTHROPIC_API_KEY=sk-...
+    uvicorn server:app --port 8000
 
-## WhatsApp bridge (optional, for the group agent)
+© Bridge-iT Technologies · All rights reserved.
 
-```bash
-cd whatsapp-bridge && npm install
-GROUP_NAME="הורים | רובוטיקה FIRST" npm start   # scan QR from a DEDICATED phone
-```
-whatsapp-web.js is against WhatsApp ToS — use a dedicated number, or port to
-Telegram's official Bot API (server side unchanged).
-
-## Layout
-```
-coach.py            coaching engine (the MentorTAB core)
-server.py           FastAPI: /coach + /mentortab + group endpoints
-web/mentortab.html  live coaching UI
-talbot.py storage.py profile.py tools.py   group agent
-profiles/*.json     swappable community profiles
-whatsapp-bridge/    WhatsApp connector
-Dockerfile Procfile render.yaml .env.example   deploy
-```
+Individual*AI x Danya Dotan
