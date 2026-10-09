@@ -135,6 +135,14 @@ def mentortab_page():
     return FileResponse(path)
 
 
+@app.get("/desk", response_class=HTMLResponse)
+def desk_page():
+    path = WEB_DIR / "desk.html"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="desk.html not found")
+    return FileResponse(path)
+
+
 WIDGET_HTML = """<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Talbot</title>
 <style>body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:#eef2ee;color:#1b241f;display:flex;justify-content:center;padding:24px 12px}
