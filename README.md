@@ -20,6 +20,7 @@ A registration concierge that answers the recurring questions — age, track, co
 Hip-hop parents: https://mentortab.onrender.com/desk?class=hiphop
 
 **In WhatsApp:** `whatsapp-bridge/` connects a class's parents group to Desk — see its README (Hebrew, step by step).
+A group's messages are readable and writable **only by the bridge** (shared `BRIDGE_TOKEN`); the public web page answers from the class knowledge alone.
 
 ## Why the room is different
 - **State before content** — kids arrive tired & hungry after school; behavior is often a state problem, not character.
@@ -36,6 +37,7 @@ A FIRST mentor is **not a therapist, not a babysitter, not a schoolteacher**. Th
 - shared: profiles/ · coach.py · talbot.py
 
 ## Run locally
+    python tests/test_multiclass.py   # offline checks (needs: pip install httpx)
     pip install -r requirements.txt
     export ANTHROPIC_API_KEY=sk-...
     uvicorn server:app --port 8000

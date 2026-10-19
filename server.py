@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
+import hmac
 import os
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 from coach import CoachEngine
 from profile import Profile, list_profiles
-from storage import add_message, init_db
+from storage import add_message, adopt_legacy_rows, init_db
 from talbot import TalbotAgent
 
 WEB_DIR = Path(__file__).parent / "web"
@@ -25,7 +26,8 @@ app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("TALBOT_CORS_ORI
                    allow_methods=["GET", "POST"], allow_headers=["*"])
 
 _profiles: dict[str, Profile] = {}
-_sessions: dict[tuple[str, str], TalbotAgent] = {}
+_sessions: dict[tuple[str, str, bool], TalbotAgent] = {}
+_legacy_adopted = False
 _coach: Optional[CoachEngine] = None
 
 
@@ -41,17 +43,32 @@ def get_profile(key: Optional[str] = None) -> Profile:
             raise HTTPException(status_code=404, detail=f"Unknown class '{key}'. Available: {list_profiles()}")
         _profiles[key] = Profile.load_by_name(key)
         init_db()
+        global _legacy_adopted
+        if not _legacy_adopted:
+            adopt_legacy_rows(default_profile_key())
+            _legacy_adopted = True
     return _profiles[key]
 
 
-def get_agent(session_id: str, profile: Profile) -> TalbotAgent:
-    slot = (profile.key, session_id)
+def bridge_authorized(token: Optional[str]) -> bool:
+    """True only for the WhatsApp bridge, which sends the shared BRIDGE_TOKEN.
+
+    Group memory (reading and writing) is limited to the bridge, so the public
+    web page can neither read a group's messages nor plant fake ones.
+    """
+    expected = os.environ.get("BRIDGE_TOKEN", "")
+    # Compare as bytes: compare_digest rejects non-ASCII str (e.g. a Hebrew password).
+    return bool(expected) and token is not None and hmac.compare_digest(token.encode(), expected.encode())
+
+
+def get_agent(session_id: str, profile: Profile, memory: bool) -> TalbotAgent:
+    slot = (profile.key, session_id, memory)
     agent = _sessions.get(slot)
     if agent is None:
         if len(_sessions) >= MAX_SESSIONS:
             _sessions.pop(next(iter(_sessions)))
         try:
-            agent = TalbotAgent(profile)
+            agent = TalbotAgent(profile, memory=memory)
         except ValueError as exc:
             raise HTTPException(status_code=503, detail=str(exc))
         _sessions[slot] = agent
@@ -113,12 +130,13 @@ class CoachRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": True, "default_class": default_profile_key(), "classes": list_profiles()}
+    return {"ok": True, "profile": get_profile().name, "default_class": default_profile_key(),
+            "classes": list_profiles()}
 
 
 @app.get("/profiles")
 def profiles() -> dict:
-    return {"default": default_profile_key(), "available": list_profiles()}
+    return {"active": get_profile().name, "default": default_profile_key(), "available": list_profiles()}
 
 
 @app.get("/profile-info")
@@ -134,8 +152,12 @@ def profile_info(cls: Optional[str] = Query(default=None, alias="class")) -> dic
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest) -> ChatResponse:
-    agent = get_agent(req.session_id, get_profile(req.profile))
+def chat(req: ChatRequest, x_bridge_token: Optional[str] = Header(default=None)) -> ChatResponse:
+    # Only the authenticated WhatsApp bridge gets the group's memory; the web page (no token) answers
+    # from the class knowledge alone. A wrong token fails loudly so a misconfigured bridge is noticed.
+    if x_bridge_token is not None and not bridge_authorized(x_bridge_token):
+        raise HTTPException(status_code=401, detail="Invalid bridge token (check BRIDGE_TOKEN on the server).")
+    agent = get_agent(req.session_id, get_profile(req.profile), memory=x_bridge_token is not None)
     agent.history = trim_history(agent.history)
     try:
         reply = agent.chat(req.message)
@@ -145,7 +167,11 @@ def chat(req: ChatRequest) -> ChatResponse:
 
 
 @app.post("/ingest")
-def ingest(req: IngestRequest) -> dict:
+def ingest(req: IngestRequest, x_bridge_token: Optional[str] = Header(default=None)) -> dict:
+    if not os.environ.get("BRIDGE_TOKEN"):
+        raise HTTPException(status_code=503, detail="Group memory is off: set BRIDGE_TOKEN on the server.")
+    if not bridge_authorized(x_bridge_token):
+        raise HTTPException(status_code=401, detail="Invalid bridge token.")
     profile = get_profile(req.profile)
     category = req.category if req.category in profile.category_keys else "general"
     msg_id = add_message(sender_name=req.sender_name, content=req.content, category=category,

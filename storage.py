@@ -48,6 +48,19 @@ def init_db() -> None:
         """)
 
 
+def adopt_legacy_rows(group_id: str) -> int:
+    """Rows stored before multi-class support carry group_id 'default'.
+
+    They belonged to the server's single class, so hand them to that class
+    once; afterwards no row stays under 'default'.
+    """
+    if group_id == DEFAULT_GROUP:
+        return 0
+    with _connect() as conn:
+        return conn.execute("UPDATE messages SET group_id = ? WHERE group_id = ?",
+                            (group_id, DEFAULT_GROUP)).rowcount
+
+
 def _fts_query(raw: str) -> Optional[str]:
     """Turn free text into a safe FTS5 query: each word quoted, OR-joined.
 

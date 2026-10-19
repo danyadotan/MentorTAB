@@ -12,12 +12,12 @@ import anthropic
 
 from profile import Profile, list_profiles
 from storage import DEFAULT_GROUP, init_db
-from tools import build_tool_schemas, dispatch
+from tools import MEMORY_TOOLS, build_tool_schemas, dispatch
 
 MODEL = os.environ.get("TALBOT_MODEL", "claude-opus-4-7")
 
 
-def build_system_prompt(profile: Profile) -> str:
+def build_system_prompt(profile: Profile, memory: bool = True) -> str:
     lines = [profile.system_prompt, "", f"## About {profile.name}", profile.about, "",
              f"## Message categories for {profile.group_term}"]
     for key, desc in profile.categories.items():
@@ -39,19 +39,26 @@ def build_system_prompt(profile: Profile) -> str:
               "  • Replies are shown as plain text, often inside WhatsApp: keep them short (up to ~8 lines), "
               "no markdown headings (#) or tables, no **double asterisks**; use simple bullets (•) and at most "
               "an occasional *single-asterisk* emphasis."]
+    if not memory:
+        lines += ["", "## Channel",
+                  "  • This conversation is on a public web page, so you have NO access to the group's messages. "
+                  "Answer from the class knowledge above. For questions about specific families, rides or past "
+                  "group messages, suggest asking in the parents' WhatsApp group."]
     return "\n".join(lines)
 
 
 class TalbotAgent:
-    def __init__(self, profile: Profile) -> None:
+    def __init__(self, profile: Profile, memory: bool = True) -> None:
+        """memory=False: public channel — no access to the group's stored messages."""
         self.profile = profile
+        self.memory = memory
         init_db()
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY environment variable not set.")
         self.client = anthropic.Anthropic(api_key=api_key)
-        self.tool_schemas = build_tool_schemas(profile)
-        self.system_prompt = build_system_prompt(profile)
+        self.tool_schemas = build_tool_schemas(profile, memory)
+        self.system_prompt = build_system_prompt(profile, memory)
         self.group_id = profile.key or DEFAULT_GROUP
         self.history: list[dict] = []
 
@@ -65,13 +72,17 @@ class TalbotAgent:
                 return "\n".join(b.text for b in resp.content if hasattr(b, "text"))
             if resp.stop_reason == "tool_use":
                 results = [{"type": "tool_result", "tool_use_id": b.id,
-                            "content": json.dumps(dispatch(b.name, b.input, self.group_id),
-                                                  ensure_ascii=False, default=str)}
+                            "content": json.dumps(self._run_tool(b.name, b.input), ensure_ascii=False, default=str)}
                            for b in resp.content if b.type == "tool_use"]
                 self.history.append({"role": "user", "content": results})
                 continue
             break
         return "[No response]"
+
+    def _run_tool(self, name: str, tool_input: dict):
+        if name in MEMORY_TOOLS and not self.memory:
+            return {"error": "Group memory is not available in this channel."}
+        return dispatch(name, tool_input, self.group_id)
 
     def run_interactive(self) -> None:
         print(f"Talbot ready — profile: {self.profile.name}\nType 'exit' to quit.\n")

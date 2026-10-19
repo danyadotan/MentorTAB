@@ -7,7 +7,9 @@
  * bot answers in the group.
  *
  * Settings: edit config.json (or override with env vars API_URL, PROFILE,
- * GROUP_NAME, BOT_TRIGGER).
+ * GROUP_NAME, BOT_TRIGGER, BRIDGE_TOKEN). "token" must equal the server's
+ * BRIDGE_TOKEN — it is what lets the bridge, and only the bridge, store and
+ * read the group's memory.
  *
  * TOS NOTE: whatsapp-web.js automates WhatsApp Web, which WhatsApp's terms do
  * not allow. Use a dedicated number (never your personal one) and keep volume
@@ -36,6 +38,7 @@ async function loadConfig() {
     groupName: (process.env.GROUP_NAME || file.groupName || "").trim(),
     triggers: (process.env.BOT_TRIGGER || file.trigger || "טלבוט")
       .split(",").map((t) => t.trim()).filter(Boolean),
+    token: (process.env.BRIDGE_TOKEN || file.token || "").trim(),
   };
 }
 
@@ -43,6 +46,11 @@ const cfg = await loadConfig();
 if (!cfg.groupName) {
   console.log("⚠️  groupName is empty in config.json — the bot will start and list your groups,");
   console.log("   but will not answer anywhere until you set groupName and restart.\n");
+}
+
+if (!cfg.token) {
+  console.log("⚠️  token is empty in config.json — the server will refuse to store or read group memory.");
+  console.log("   Set the same password in config.json \"token\" and in Render → Environment → BRIDGE_TOKEN.\n");
 }
 
 const client = new Client({
@@ -80,7 +88,7 @@ async function api(route, body, timeoutMs = 120_000) {
   // Generous timeout: a sleeping free server can take ~50s to wake up.
   const res = await fetch(`${cfg.apiUrl}${route}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Bridge-Token": cfg.token },
     body: JSON.stringify({ ...body, profile: cfg.profile }),
     signal: AbortSignal.timeout(timeoutMs),
   });
@@ -88,7 +96,30 @@ async function api(route, body, timeoutMs = 120_000) {
   return res.json();
 }
 
-const busy = new Set(); // one answer at a time per group
+// Questions in the same group are answered one after another, in order — none is dropped.
+const queues = new Map();
+function enqueue(chatId, task) {
+  const next = (queues.get(chatId) || Promise.resolve()).then(task, task);
+  queues.set(chatId, next);
+  next.finally(() => { if (queues.get(chatId) === next) queues.delete(chatId); }).catch(() => {});
+}
+
+async function answer(chat, msg, senderName, question) {
+  const typing = setInterval(() => chat.sendStateTyping().catch(() => {}), 20_000);
+  chat.sendStateTyping().catch(() => {});
+  try {
+    const { reply } = await api("/chat", {
+      message: `${senderName}: ${question}`,
+      session_id: `wa-${chat.id._serialized}`,
+    });
+    await msg.reply(reply);
+  } catch (err) {
+    console.error("Answer failed:", err.message);
+    await msg.reply("מצטער, יש לי תקלה רגעית 🙏 נסו לשאול שוב בעוד דקה.").catch(() => {});
+  } finally {
+    clearInterval(typing);
+  }
+}
 
 client.on("message", async (msg) => {
   try {
@@ -98,34 +129,17 @@ client.on("message", async (msg) => {
     if (!text) return;
 
     const contact = await msg.getContact();
-    const senderName = contact.pushname || contact.name || contact.number || "הורה";
+    const senderName = contact.pushname || contact.name || "הורה";
 
-    // Every group message becomes part of this class's memory.
-    await api("/ingest", { sender_name: senderName, content: text });
+    // Every group message becomes part of this class's memory (name + text only;
+    // phone numbers are deliberately not stored).
+    await api("/ingest", { sender_name: senderName, content: text }).catch((err) =>
+      console.error("Could not store message:", err.message));
 
     const trigger = cfg.triggers.find((t) => text.includes(t));
     if (!trigger) return;
-
-    const chatId = chat.id._serialized;
-    if (busy.has(chatId)) return;
-    busy.add(chatId);
-
-    const typing = setInterval(() => chat.sendStateTyping().catch(() => {}), 20_000);
-    chat.sendStateTyping().catch(() => {});
-    try {
-      const question = text.split(trigger).join("").trim() || text;
-      const { reply } = await api("/chat", {
-        message: `${senderName}: ${question}`,
-        session_id: `wa-${chatId}`,
-      });
-      await msg.reply(reply);
-    } catch (err) {
-      console.error("Answer failed:", err.message);
-      await msg.reply("מצטער, יש לי תקלה רגעית 🙏 נסו לשאול שוב בעוד דקה.");
-    } finally {
-      clearInterval(typing);
-      busy.delete(chatId);
-    }
+    const question = text.split(trigger).join("").trim() || text;
+    enqueue(chat.id._serialized, () => answer(chat, msg, senderName, question));
   } catch (err) {
     console.error("Bridge error:", err.message);
   }

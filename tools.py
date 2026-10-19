@@ -21,7 +21,17 @@ if TYPE_CHECKING:
     from profile import Profile
 
 
-def build_tool_schemas(profile: "Profile") -> list[dict]:
+MEMORY_TOOLS = {"add_message", "search_messages", "find_experts", "get_messages_by_category",
+                "get_recent_messages", "get_statistics"}
+
+
+def build_tool_schemas(profile: "Profile", memory: bool = True) -> list[dict]:
+    """Tool schemas for a profile. Without memory, only the external web search is offered."""
+    schemas = _all_tool_schemas(profile)
+    return schemas if memory else [t for t in schemas if t["name"] not in MEMORY_TOOLS]
+
+
+def _all_tool_schemas(profile: "Profile") -> list[dict]:
     cats = profile.category_keys
     members, group = profile.members_term, profile.group_term
     return [
