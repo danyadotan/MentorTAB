@@ -8,6 +8,7 @@ import urllib.request
 from typing import TYPE_CHECKING, Any
 
 from storage import (
+    DEFAULT_GROUP,
     add_message as _add_message,
     find_senders_by_topic,
     get_messages_by_category,
@@ -59,9 +60,11 @@ def build_tool_schemas(profile: "Profile") -> list[dict]:
     ]
 
 
-def add_message(sender_name, content, category="general", sender_phone=None, timestamp=None):
+def add_message(sender_name, content, category="general", sender_phone=None, timestamp=None,
+                group_id=DEFAULT_GROUP):
     return {"ok": True, "id": _add_message(sender_name=sender_name, content=content, category=category,
-                                           sender_phone=sender_phone, timestamp=timestamp)}
+                                           sender_phone=sender_phone, timestamp=timestamp,
+                                           group_id=group_id)}
 
 
 def web_search(query: str) -> dict:
@@ -83,16 +86,22 @@ def web_search(query: str) -> dict:
 
 
 _TOOL_MAP = {
-    "add_message": lambda inp: add_message(**inp),
-    "search_messages": lambda inp: _search_messages(**inp),
-    "find_experts": lambda inp: find_senders_by_topic(**inp),
-    "get_messages_by_category": lambda inp: get_messages_by_category(**inp),
-    "get_recent_messages": lambda inp: get_recent_messages(**inp),
-    "get_statistics": lambda inp: _get_statistics(),
-    "web_search": lambda inp: web_search(**inp),
+    "add_message": lambda inp, g: add_message(**inp, group_id=g),
+    "search_messages": lambda inp, g: _search_messages(**inp, group_id=g),
+    "find_experts": lambda inp, g: find_senders_by_topic(**inp, group_id=g),
+    "get_messages_by_category": lambda inp, g: get_messages_by_category(**inp, group_id=g),
+    "get_recent_messages": lambda inp, g: get_recent_messages(**inp, group_id=g),
+    "get_statistics": lambda inp, g: _get_statistics(group_id=g),
+    "web_search": lambda inp, g: web_search(**inp),
 }
 
 
-def dispatch(tool_name: str, tool_input: dict[str, Any]) -> Any:
+def dispatch(tool_name: str, tool_input: dict[str, Any], group_id: str = DEFAULT_GROUP) -> Any:
+    """Run a tool scoped to one group. Errors go back to the model, never crash the reply."""
     fn = _TOOL_MAP.get(tool_name)
-    return fn(tool_input) if fn else {"error": f"Unknown tool: {tool_name}"}
+    if fn is None:
+        return {"error": f"Unknown tool: {tool_name}"}
+    try:
+        return fn(dict(tool_input or {}), group_id)
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}

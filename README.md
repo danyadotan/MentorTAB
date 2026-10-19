@@ -16,6 +16,11 @@ A registration concierge that answers the recurring questions — age, track, co
 
 **Live:** https://mentortab.onrender.com/desk
 
+**One engine, any class:** each class is one file in `profiles/`, with its own isolated memory.
+Hip-hop parents: https://mentortab.onrender.com/desk?class=hiphop
+
+**In WhatsApp:** `whatsapp-bridge/` connects a class's parents group to Desk — see its README (Hebrew, step by step).
+
 ## Why the room is different
 - **State before content** — kids arrive tired & hungry after school; behavior is often a state problem, not character.
 - **~50% didn't choose to be here** — resistance is un-earned buy-in, not defiance (Self-Determination Theory).

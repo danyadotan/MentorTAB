@@ -24,6 +24,9 @@ class Profile:
     key_people: list[dict[str, str]] = field(default_factory=list)
     custom_instructions: list[str] = field(default_factory=list)
     demo_messages: list[dict[str, Any]] = field(default_factory=list)
+    display_name: str = ""          # short label for UIs, e.g. "היפ-הופ"
+    suggested_questions: list[str] = field(default_factory=list)  # quick-ask chips on the Desk page
+    key: str = ""                   # file stem; also the memory scope (group_id)
 
     @property
     def category_keys(self) -> list[str]:
@@ -48,7 +51,9 @@ class Profile:
         path = PROFILES_DIR / f"{name}.json"
         if not path.exists():
             raise FileNotFoundError(f"Profile '{name}' not found. Available: {list_profiles()}")
-        return cls.load(path)
+        profile = cls.load(path)
+        profile.key = name
+        return profile
 
 
 def list_profiles() -> list[str]:

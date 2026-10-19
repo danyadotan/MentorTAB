@@ -11,10 +11,10 @@ import sys
 import anthropic
 
 from profile import Profile, list_profiles
-from storage import init_db
+from storage import DEFAULT_GROUP, init_db
 from tools import build_tool_schemas, dispatch
 
-MODEL = "claude-opus-4-7"
+MODEL = os.environ.get("TALBOT_MODEL", "claude-opus-4-7")
 
 
 def build_system_prompt(profile: Profile) -> str:
@@ -33,7 +33,12 @@ def build_system_prompt(profile: Profile) -> str:
               f"  • When you use web_search, label it: '⚠️ מקור חיצוני (אינטרנט), לא ממידע {profile.group_term}.'",
               "  • Never expose private info, secrets, or personal details beyond what members shared publicly.",
               "  • Never fabricate statements in a member's name.",
-              "  • Match the language of the user's message (Hebrew / English)."]
+              "  • Never invent members, families or past messages. Only mention people or messages that your "
+              "memory tools actually returned; if memory is empty, say so plainly.",
+              "  • Match the language of the user's message (Hebrew / English).",
+              "  • Replies are shown as plain text, often inside WhatsApp: keep them short (up to ~8 lines), "
+              "no markdown headings (#) or tables, no **double asterisks**; use simple bullets (•) and at most "
+              "an occasional *single-asterisk* emphasis."]
     return "\n".join(lines)
 
 
@@ -47,6 +52,7 @@ class TalbotAgent:
         self.client = anthropic.Anthropic(api_key=api_key)
         self.tool_schemas = build_tool_schemas(profile)
         self.system_prompt = build_system_prompt(profile)
+        self.group_id = profile.key or DEFAULT_GROUP
         self.history: list[dict] = []
 
     def chat(self, user_message: str) -> str:
@@ -59,7 +65,8 @@ class TalbotAgent:
                 return "\n".join(b.text for b in resp.content if hasattr(b, "text"))
             if resp.stop_reason == "tool_use":
                 results = [{"type": "tool_result", "tool_use_id": b.id,
-                            "content": json.dumps(dispatch(b.name, b.input), ensure_ascii=False, default=str)}
+                            "content": json.dumps(dispatch(b.name, b.input, self.group_id),
+                                                  ensure_ascii=False, default=str)}
                            for b in resp.content if b.type == "tool_use"]
                 self.history.append({"role": "user", "content": results})
                 continue
@@ -87,7 +94,8 @@ def seed_demo(profile: Profile) -> None:
     print(f"Seeding {len(profile.demo_messages)} demo messages...")
     for m in profile.demo_messages:
         add_message(sender_name=m["sender_name"], content=m["content"], category=m["category"],
-                    sender_phone=m.get("sender_phone"), timestamp=m.get("timestamp"))
+                    sender_phone=m.get("sender_phone"), timestamp=m.get("timestamp"),
+                    group_id=profile.key or DEFAULT_GROUP)
     print("Done.")
 
 

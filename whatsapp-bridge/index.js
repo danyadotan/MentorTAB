@@ -1,50 +1,135 @@
 /**
- * WhatsApp bridge — connects a dedicated WhatsApp number to a group, ingests
- * every message into the API, and replies when addressed by name.
+ * MentorTAB · Desk — WhatsApp bridge
+ * ----------------------------------
+ * Runs on a computer (e.g. your laptop), linked to a DEDICATED WhatsApp number
+ * as a "linked device". Every message in the configured group is stored in the
+ * class's memory; when someone writes the trigger word (default "טלבוט"), the
+ * bot answers in the group.
  *
- * TOS WARNING: whatsapp-web.js automates WhatsApp Web, against WhatsApp's ToS.
- * Use a DEDICATED number, moderate volume. Telegram Bot API is a compliant alt.
+ * Settings: edit config.json (or override with env vars API_URL, PROFILE,
+ * GROUP_NAME, BOT_TRIGGER).
  *
- * Env: TALBOT_API_URL (default http://localhost:8000), GROUP_NAME (required),
- *      BOT_TRIGGER (default "טלבוט")
+ * TOS NOTE: whatsapp-web.js automates WhatsApp Web, which WhatsApp's terms do
+ * not allow. Use a dedicated number (never your personal one) and keep volume
+ * moderate. A fully compliant alternative is Telegram's official Bot API.
  */
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import pkg from "whatsapp-web.js";
-import qrcode from "qrcode-terminal";
-const { Client, LocalAuth } = pkg;
+import qrcodeTerminal from "qrcode-terminal";
+import QRCode from "qrcode";
 
-const API_URL = process.env.TALBOT_API_URL ?? "http://localhost:8000";
-const GROUP_NAME = process.env.GROUP_NAME;
-const BOT_TRIGGER = process.env.BOT_TRIGGER ?? "טלבוט";
-if (!GROUP_NAME) { console.error("GROUP_NAME env var is required."); process.exit(1); }
+const { Client, LocalAuth } = pkg;
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+async function loadConfig() {
+  let file = {};
+  try {
+    file = JSON.parse(await readFile(path.join(HERE, "config.json"), "utf8"));
+  } catch {
+    // no config.json — env vars only
+  }
+  return {
+    apiUrl: (process.env.API_URL || file.apiUrl || "https://mentortab.onrender.com").replace(/\/+$/, ""),
+    profile: process.env.PROFILE || file.profile || "hiphop",
+    groupName: (process.env.GROUP_NAME || file.groupName || "").trim(),
+    triggers: (process.env.BOT_TRIGGER || file.trigger || "טלבוט")
+      .split(",").map((t) => t.trim()).filter(Boolean),
+  };
+}
+
+const cfg = await loadConfig();
+if (!cfg.groupName) {
+  console.log("⚠️  groupName is empty in config.json — the bot will start and list your groups,");
+  console.log("   but will not answer anywhere until you set groupName and restart.\n");
+}
 
 const client = new Client({
-  authStrategy: new LocalAuth({ dataPath: ".wwebjs_auth" }),
+  authStrategy: new LocalAuth({ dataPath: path.join(HERE, ".wwebjs_auth") }),
   puppeteer: { args: ["--no-sandbox", "--disable-setuid-sandbox"] },
 });
-client.on("qr", (qr) => { console.log("Scan this QR from the dedicated phone:"); qrcode.generate(qr, { small: true }); });
-client.on("ready", () => console.log(`Bridge ready. Group: "${GROUP_NAME}", trigger: "${BOT_TRIGGER}"`));
 
-async function api(path, bodyObj) {
-  const res = await fetch(`${API_URL}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bodyObj) });
-  if (!res.ok) throw new Error(`API ${path} -> ${res.status} ${await res.text().catch(() => "")}`);
+client.on("qr", async (qr) => {
+  const png = path.join(HERE, "qr.png");
+  await QRCode.toFile(png, qr, { width: 420 });
+  console.log("\n📱 Link the bot's phone: WhatsApp → Settings → Linked devices → Link a device");
+  console.log(`   Scan the QR below, or open this image: ${png}\n`);
+  qrcodeTerminal.generate(qr, { small: true });
+});
+
+client.on("ready", async () => {
+  console.log(`\n✅ Bot connected. Class: "${cfg.profile}" · trigger: ${cfg.triggers.join(" / ")}`);
+  const chats = await client.getChats();
+  const groups = chats.filter((c) => c.isGroup).map((c) => c.name);
+  console.log("   Groups this number is in:");
+  groups.forEach((g) => console.log(`     • ${g}${matchesGroup(g) ? "   ← watching" : ""}`));
+  if (cfg.groupName && !groups.some(matchesGroup)) {
+    console.log(`\n⚠️  No group matches "${cfg.groupName}". Copy a name from the list into config.json.`);
+  }
+});
+
+client.on("auth_failure", (m) => console.error("❌ Login failed:", m, "— delete the .wwebjs_auth folder and scan again."));
+client.on("disconnected", (r) => console.error("🔌 Disconnected:", r, "— restart with: npm start"));
+
+function matchesGroup(name) {
+  return Boolean(cfg.groupName) && (name || "").toLowerCase().includes(cfg.groupName.toLowerCase());
+}
+
+async function api(route, body, timeoutMs = 120_000) {
+  // Generous timeout: a sleeping free server can take ~50s to wake up.
+  const res = await fetch(`${cfg.apiUrl}${route}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, profile: cfg.profile }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) throw new Error(`${route} → ${res.status} ${await res.text().catch(() => "")}`);
   return res.json();
 }
+
+const busy = new Set(); // one answer at a time per group
 
 client.on("message", async (msg) => {
   try {
     const chat = await msg.getChat();
-    if (!chat.isGroup || chat.name !== GROUP_NAME) return;
-    const contact = await msg.getContact();
-    const senderName = contact.pushname || contact.name || contact.number;
-    const senderPhone = contact.number ? `+${contact.number}` : null;
+    if (!chat.isGroup || !matchesGroup(chat.name)) return;
     const text = (msg.body || "").trim();
     if (!text) return;
-    await api("/ingest", { sender_name: senderName, content: text, sender_phone: senderPhone });
-    if (!text.includes(BOT_TRIGGER)) return;
-    chat.sendStateTyping();
-    const question = text.replaceAll(BOT_TRIGGER, "").trim() || text;
-    const { reply } = await api("/chat", { message: `${senderName}: ${question}`, session_id: `wa-${chat.id._serialized}` });
-    await msg.reply(reply);
-  } catch (err) { console.error("Bridge error:", err.message); }
+
+    const contact = await msg.getContact();
+    const senderName = contact.pushname || contact.name || contact.number || "הורה";
+
+    // Every group message becomes part of this class's memory.
+    await api("/ingest", { sender_name: senderName, content: text });
+
+    const trigger = cfg.triggers.find((t) => text.includes(t));
+    if (!trigger) return;
+
+    const chatId = chat.id._serialized;
+    if (busy.has(chatId)) return;
+    busy.add(chatId);
+
+    const typing = setInterval(() => chat.sendStateTyping().catch(() => {}), 20_000);
+    chat.sendStateTyping().catch(() => {});
+    try {
+      const question = text.split(trigger).join("").trim() || text;
+      const { reply } = await api("/chat", {
+        message: `${senderName}: ${question}`,
+        session_id: `wa-${chatId}`,
+      });
+      await msg.reply(reply);
+    } catch (err) {
+      console.error("Answer failed:", err.message);
+      await msg.reply("מצטער, יש לי תקלה רגעית 🙏 נסו לשאול שוב בעוד דקה.");
+    } finally {
+      clearInterval(typing);
+      busy.delete(chatId);
+    }
+  } catch (err) {
+    console.error("Bridge error:", err.message);
+  }
 });
+
+console.log(`Starting MentorTAB bridge → ${cfg.apiUrl} (class: ${cfg.profile}) …`);
 client.initialize();
