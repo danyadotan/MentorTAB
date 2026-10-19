@@ -2,52 +2,95 @@
 
 from __future__ import annotations
 
+import hmac
 import os
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 from coach import CoachEngine
 from profile import Profile, list_profiles
-from storage import add_message, init_db
+from storage import add_message, adopt_legacy_rows, init_db
 from talbot import TalbotAgent
 
 WEB_DIR = Path(__file__).parent / "web"
 MAX_SESSIONS = 200
 MAX_HISTORY_MESSAGES = 40
 
-app = FastAPI(title="MentorTAB API", version="1.1")
+app = FastAPI(title="MentorTAB API", version="1.2")
 app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("TALBOT_CORS_ORIGINS", "*").split(","),
                    allow_methods=["GET", "POST"], allow_headers=["*"])
 
-_profile: Optional[Profile] = None
-_sessions: dict[str, TalbotAgent] = {}
+_profiles: dict[str, Profile] = {}
+_sessions: dict[tuple[str, str, bool], TalbotAgent] = {}
+_legacy_adopted = False
 _coach: Optional[CoachEngine] = None
 
 
-def get_profile() -> Profile:
-    global _profile
-    if _profile is None:
-        _profile = Profile.load_by_name(os.environ.get("TALBOT_PROFILE", "first_robotics"))
+def default_profile_key() -> str:
+    return os.environ.get("TALBOT_PROFILE", "first_robotics")
+
+
+def get_profile(key: Optional[str] = None) -> Profile:
+    """Load (and cache) a class profile. One server serves every profile in profiles/."""
+    key = key or default_profile_key()
+    if key not in _profiles:
+        if key not in list_profiles():
+            raise HTTPException(status_code=404, detail=f"Unknown class '{key}'. Available: {list_profiles()}")
+        _profiles[key] = Profile.load_by_name(key)
         init_db()
-    return _profile
+        global _legacy_adopted
+        if not _legacy_adopted:
+            adopt_legacy_rows(default_profile_key())
+            _legacy_adopted = True
+    return _profiles[key]
 
 
-def get_agent(session_id: str) -> TalbotAgent:
-    agent = _sessions.get(session_id)
+def bridge_authorized(token: Optional[str]) -> bool:
+    """True only for the WhatsApp bridge, which sends the shared BRIDGE_TOKEN.
+
+    Group memory (reading and writing) is limited to the bridge, so the public
+    web page can neither read a group's messages nor plant fake ones.
+    """
+    expected = os.environ.get("BRIDGE_TOKEN", "")
+    # Compare as bytes: compare_digest rejects non-ASCII str (e.g. a Hebrew password).
+    return bool(expected) and token is not None and hmac.compare_digest(token.encode(), expected.encode())
+
+
+def get_agent(session_id: str, profile: Profile, memory: bool) -> TalbotAgent:
+    slot = (profile.key, session_id, memory)
+    agent = _sessions.get(slot)
     if agent is None:
         if len(_sessions) >= MAX_SESSIONS:
             _sessions.pop(next(iter(_sessions)))
         try:
-            agent = TalbotAgent(get_profile())
+            agent = TalbotAgent(profile, memory=memory)
         except ValueError as exc:
             raise HTTPException(status_code=503, detail=str(exc))
-        _sessions[session_id] = agent
+        _sessions[slot] = agent
     return agent
+
+
+def _is_plain_user_turn(msg: dict) -> bool:
+    return msg.get("role") == "user" and isinstance(msg.get("content"), str)
+
+
+def trim_history(history: list[dict]) -> list[dict]:
+    """Keep the tail of a conversation, starting on a real user turn.
+
+    A naive cut can land between an assistant tool_use and its tool_result,
+    which the API rejects; so drop leading messages until a plain user text turn.
+    """
+    if len(history) <= MAX_HISTORY_MESSAGES:
+        return history
+    tail = history[-MAX_HISTORY_MESSAGES:]
+    while tail and not _is_plain_user_turn(tail[0]):
+        tail.pop(0)
+    return tail
 
 
 def get_coach() -> CoachEngine:
@@ -63,6 +106,7 @@ def get_coach() -> CoachEngine:
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     session_id: str = Field(default="default", max_length=128)
+    profile: Optional[str] = Field(default=None, max_length=64, description="Class key, e.g. 'hiphop'")
 
 
 class ChatResponse(BaseModel):
@@ -76,6 +120,7 @@ class IngestRequest(BaseModel):
     category: Optional[str] = None
     sender_phone: Optional[str] = None
     timestamp: Optional[str] = None
+    profile: Optional[str] = Field(default=None, max_length=64, description="Class key, e.g. 'hiphop'")
 
 
 class CoachRequest(BaseModel):
@@ -85,21 +130,35 @@ class CoachRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": True, "profile": get_profile().name}
+    return {"ok": True, "profile": get_profile().name, "default_class": default_profile_key(),
+            "classes": list_profiles()}
 
 
 @app.get("/profiles")
 def profiles() -> dict:
-    return {"active": get_profile().name, "available": list_profiles()}
+    return {"active": get_profile().name, "default": default_profile_key(), "available": list_profiles()}
+
+
+@app.get("/profile-info")
+def profile_info(cls: Optional[str] = Query(default=None, alias="class")) -> dict:
+    """Title + suggested questions for a class's Desk page."""
+    profile = get_profile(cls)
+    return {
+        "key": profile.key,
+        "name": profile.name,
+        "display_name": profile.display_name or profile.name,
+        "suggested_questions": profile.suggested_questions,
+    }
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest) -> ChatResponse:
-    agent = get_agent(req.session_id)
-    if len(agent.history) > MAX_HISTORY_MESSAGES:
-        agent.history = agent.history[-MAX_HISTORY_MESSAGES:]
-        while agent.history and agent.history[0]["role"] != "user":
-            agent.history.pop(0)
+def chat(req: ChatRequest, x_bridge_token: Optional[str] = Header(default=None)) -> ChatResponse:
+    # Only the authenticated WhatsApp bridge gets the group's memory; the web page (no token) answers
+    # from the class knowledge alone. A wrong token fails loudly so a misconfigured bridge is noticed.
+    if x_bridge_token is not None and not bridge_authorized(x_bridge_token):
+        raise HTTPException(status_code=401, detail="Invalid bridge token (check BRIDGE_TOKEN on the server).")
+    agent = get_agent(req.session_id, get_profile(req.profile), memory=x_bridge_token is not None)
+    agent.history = trim_history(agent.history)
     try:
         reply = agent.chat(req.message)
     except Exception as exc:
@@ -108,12 +167,16 @@ def chat(req: ChatRequest) -> ChatResponse:
 
 
 @app.post("/ingest")
-def ingest(req: IngestRequest) -> dict:
-    profile = get_profile()
+def ingest(req: IngestRequest, x_bridge_token: Optional[str] = Header(default=None)) -> dict:
+    if not os.environ.get("BRIDGE_TOKEN"):
+        raise HTTPException(status_code=503, detail="Group memory is off: set BRIDGE_TOKEN on the server.")
+    if not bridge_authorized(x_bridge_token):
+        raise HTTPException(status_code=401, detail="Invalid bridge token.")
+    profile = get_profile(req.profile)
     category = req.category if req.category in profile.category_keys else "general"
     msg_id = add_message(sender_name=req.sender_name, content=req.content, category=category,
-                         sender_phone=req.sender_phone, timestamp=req.timestamp)
-    return {"ok": True, "id": msg_id, "category": category}
+                         sender_phone=req.sender_phone, timestamp=req.timestamp, group_id=profile.key)
+    return {"ok": True, "id": msg_id, "class": profile.key, "category": category}
 
 
 @app.post("/coach")

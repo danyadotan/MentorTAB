@@ -47,28 +47,40 @@
 <div class="wrap">
   <header>
     <div class="brand"><span class="dot"></span>Mentor<span>TAB</span> · Desk</div>
-    <span class="tag">הרשמות &amp; הורים</span>
+    <span class="tag" id="classTag">הרשמות &amp; הורים</span>
   </header>
-  <p class="sub">עוזר ההורים לחוג FIRST רובוטיקה — שאלות הרשמה, מסלולים, עלויות, לוח זמנים והסעות. זוכר את הקבוצה, ומסמן מתי מידע מגיע מבחוץ.</p>
+  <p class="sub" id="sub">עוזר ההורים של החוג — שאלות הרשמה, מסלולים, עלויות, לוח זמנים והסעות. זוכר את הקבוצה, ומסמן מתי מידע מגיע מבחוץ.</p>
   <div class="chat" id="chat" aria-live="polite"></div>
   <div class="chips" id="chips"></div>
   <form id="f"><input id="q" placeholder="שאלו אותי על ההרשמה לחוג..." autocomplete="off"><button class="send" id="send" type="submit">שלח</button></form>
   <p class="foot en">MentorTAB · Desk — © Bridge-iT Technologies · by Danya Dotan</p>
 </div>
 <script>
-const CHIPS=["מאיזה גיל אפשר להצטרף?","כמה זה עולה?","העשרה או תחרותי?","מתי התחרויות?","מי עוד נרשם מהעיר שלי?"];
+const CLASS=new URLSearchParams(location.search).get('class')||null;
+const FALLBACK_CHIPS=["מאיזה גיל אפשר להצטרף?","כמה זה עולה?","מה לוח הזמנים?"];
 const chat=document.getElementById('chat'),chips=document.getElementById('chips'),form=document.getElementById('f'),input=document.getElementById('q'),send=document.getElementById('send');
 const sid='desk-'+Math.random().toString(36).slice(2,10);
 function el(t,c,h){const e=document.createElement(t);if(c)e.className=c;if(h!==undefined)e.innerHTML=h;return e;}
 function you(t){const m=el('div','m you');m.textContent=t;chat.appendChild(m);chat.scrollTop=chat.scrollHeight;}
 function bot(t){const m=el('div','m bot');m.innerHTML='<div class="who">MentorTAB · Desk</div>';const p=el('div');p.textContent=t;m.appendChild(p);chat.appendChild(m);chat.scrollTop=chat.scrollHeight;return m;}
 function thinking(){const m=el('div','m bot');m.innerHTML='<div class="who">MentorTAB · Desk</div><span class="thinking"><i></i><i></i><i></i></span>';chat.appendChild(m);chat.scrollTop=chat.scrollHeight;return m;}
-CHIPS.forEach(c=>{const b=el('button','chip',c);b.type='button';b.onclick=()=>ask(c);chips.appendChild(b);});
-bot("היי! אני עוזר ההרשמות של החוג 🤖 אפשר לשאול אותי כל שאלה — או ללחוץ על אחת השאלות הנפוצות למטה.");
+function renderChips(list){chips.innerHTML='';list.forEach(c=>{const b=el('button','chip');b.textContent=c;b.type='button';b.onclick=()=>ask(c);chips.appendChild(b);});}
+async function loadClass(){
+  let title='',qs=FALLBACK_CHIPS;
+  try{
+    const r=await fetch('/profile-info'+(CLASS?('?class='+encodeURIComponent(CLASS)):''));
+    if(r.ok){const d=await r.json();title=d.display_name||'';if(d.suggested_questions&&d.suggested_questions.length)qs=d.suggested_questions;}
+  }catch(e){}
+  if(title){document.getElementById('classTag').textContent='הורים · '+title;document.title='MentorTAB · Desk — '+title;
+    document.getElementById('sub').textContent='עוזר ההורים של חוג '+title+' — הרשמה, קבוצות, לוח זמנים, הופעות והסעות. זוכר את הקבוצה, ומסמן מתי מידע מגיע מבחוץ.';}
+  renderChips(qs);
+  bot('היי! אני עוזר ההורים'+(title?' של חוג '+title:'')+' 🤖 אפשר לשאול אותי כל שאלה — או ללחוץ על אחת השאלות הנפוצות למטה.');
+}
+loadClass();
 async function ask(text){
   if(!text)return;send.disabled=true;you(text);const w=thinking();
   try{
-    const r=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,session_id:sid})});
+    const r=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,session_id:sid,profile:CLASS})});
     const d=await r.json();w.remove();
     if(!r.ok)throw new Error(d.detail||('שגיאה '+r.status));
     bot(d.reply);
